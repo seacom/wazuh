@@ -37,6 +37,9 @@ int Read_Localfile(XML_NODE node, void *d1, __attribute__((unused)) void *d2)
     const char *xml_localfile_age = "age";
     const char *xml_localfile_exclude = "exclude";
     const char *xml_localfile_binaries = "ignore_binaries";
+    const char *xml_localfile_multiline_regex = "multiline_regex";
+    const char *xml_localfile_multiline_negate = "multiline_negate";
+    const char *xml_localfile_multiline_match = "multiline_match";
 
     logreader *logf;
     logreader_config *log_config;
@@ -298,6 +301,7 @@ int Read_Localfile(XML_NODE node, void *d1, __attribute__((unused)) void *d2)
                     return (OS_INVALID);
                 }
 
+            } else if (strcmp(logf[pl].logformat, "multiline_pattern") == 0) {
             } else if (strcmp(logf[pl].logformat, EVENTLOG) == 0) {
             } else if (strcmp(logf[pl].logformat, EVENTCHANNEL) == 0) {
             } else {
@@ -354,6 +358,27 @@ int Read_Localfile(XML_NODE node, void *d1, __attribute__((unused)) void *d2)
             }
             else if (strcmp(node[i]->content,"no") == 0) {
                 logf[pl].filter_binary = 0;
+            } else {
+                merror(XML_VALUEERR, node[i]->element, node[i]->content);
+                return (OS_INVALID);
+            }
+
+        } else if (strcmp(node[i]->element, xml_localfile_multiline_regex) == 0) {
+            os_strdup(node[i]->content, logf[pl].multiline_regex);
+        } else if (strcmp(node[i]->element, xml_localfile_multiline_negate) == 0) {
+            if(strcmp(node[i]->content,"yes") == 0) {
+                logf[pl].multiline_negate = 1;
+            } else if (strcmp(node[i]->content,"no") == 0) {
+                logf[pl].multiline_negate = 0;
+            } else {
+                merror(XML_VALUEERR, node[i]->element, node[i]->content);
+                return (OS_INVALID);
+            }
+        } else if (strcmp(node[i]->element, xml_localfile_multiline_match) == 0) {
+            if(strcmp(node[i]->content,"after") == 0) {
+                logf[pl].multiline_match_after = 1;
+            } else if (strcmp(node[i]->content,"before") == 0) {
+                logf[pl].multiline_match_after = 0;
             } else {
                 merror(XML_VALUEERR, node[i]->element, node[i]->content);
                 return (OS_INVALID);
@@ -590,6 +615,7 @@ void Free_Logreader(logreader * logf) {
         free(logf->alias);
         free(logf->query);
         free(logf->exclude);
+        free(logf->multiline_regex);
 
         if (logf->target) {
             for (i = 0; logf->target[i]; i++) {

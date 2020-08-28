@@ -84,6 +84,9 @@ typedef struct _logreader {
     int exists;
     unsigned int age;
     char *age_str;
+    char *multiline_regex;
+    int multiline_negate;
+    int multiline_match_after;
 
     void *(*read)(struct _logreader *lf, int *rc, int drop_it);
 

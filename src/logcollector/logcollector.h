@@ -93,6 +93,9 @@ void *read_audit(logreader *lf, int *rc, int drop_it);
 /* Read json events */
 void *read_json(logreader *lf, int *rc, int drop_it);
 
+/* Read multiline events with pattern regex */
+void *read_multiline_pattern(logreader *lf, int *rc, int drop_it);
+
 #ifdef WIN32
 void win_startel();
 void win_readel();
