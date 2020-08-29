@@ -92,6 +92,7 @@ typedef struct _logreader {
 
     FILE *fp;
     fpos_t position; // Pointer offset when closed
+    int truncated_multiline; // used in multiline_pattern to prevent truncating multiline blocks
 } logreader;
 
 typedef struct _logreader_glob {

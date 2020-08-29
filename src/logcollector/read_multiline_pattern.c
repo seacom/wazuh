@@ -33,6 +33,8 @@ void send_buffer_to_queue(logreader *lf, int drop_it, char *buffer) {
         w_msg_hash_queues_push(buffer, lf->file, strlen(buffer) + 1, lf->log_target, LOCALFILE_MQ);
     }
     buffer[0] = '\0';
+    /* The buffer has been sent at least one time during this loop, so we can set truncated_multiline to false for this source */
+    lf->truncated_multiline = 0;
 }
 
 /* Read multiline logs with regex pattern */
@@ -44,6 +46,7 @@ void *read_multiline_pattern(logreader *lf, int *rc, int drop_it) {
     char buffer[OS_MAXSTR + 1];
     fpos_t fp_pos;
     int lines = 0;
+    fpos_t fp_last_multiline_pos;
 #ifdef WIN32
     int64_t offset;
     int64_t rbytes;
@@ -59,6 +62,7 @@ void *read_multiline_pattern(logreader *lf, int *rc, int drop_it) {
 
     /* Get initial file location */
     fgetpos(lf->fp, &fp_pos);
+    fp_last_multiline_pos = fp_pos;
 
     for (offset = w_ftell(lf->fp); can_read() && fgets(str, OS_MAXSTR - OS_LOG_HEADER, lf->fp) != NULL && (!maximum_lines || lines < maximum_lines) && offset >= 0; offset += rbytes) {
         rbytes = w_ftell(lf->fp) - offset;
@@ -130,6 +134,7 @@ void *read_multiline_pattern(logreader *lf, int *rc, int drop_it) {
                 if (buffer[0] != '\0') {
                     /* Buffer is not empty */
                     send_buffer_to_queue(lf, drop_it, buffer);
+                    fp_last_multiline_pos = fp_pos;  // position before reading this line, so at the end of the previous buffer
                 }
                 __bs = add_to_buffer(str, buffer);
             } else {
@@ -138,6 +143,7 @@ void *read_multiline_pattern(logreader *lf, int *rc, int drop_it) {
                  */
                 __bs = add_to_buffer(str, buffer);
                 send_buffer_to_queue(lf, drop_it, buffer);
+                fgetpos(lf->fp, &fp_last_multiline_pos);  // position after reading this line
             }
         } else {
             /* Just add the current line to the buffer and go the next iteration */
@@ -180,8 +186,29 @@ void *read_multiline_pattern(logreader *lf, int *rc, int drop_it) {
         continue;
     }
     if (buffer[0] != '\0') {
-        /* Flush what is still in the buffer */
-        send_buffer_to_queue(lf, drop_it, buffer);
+        /* There is still something in the buffer, we want to wait for new
+         * lines of the message until the next loop
+         */
+        if (lf->truncated_multiline) {
+            /* We set this variable the last time the function was called and
+             * it has never been resetted, this means that we have in the
+             * buffer lines from the last loop 
+             */
+            /* Flush the buffer before it is stale */
+            send_buffer_to_queue(lf, drop_it, buffer);
+        } else {
+            /* In the last call we didn't leave any line behind or that lines
+             * has been sent during this interation
+             */
+            /* There are still lines in the buffer, we will reset the file
+             * position in order to process them in the next call, we also set
+             * the truncated_multiline variabile to be sure to flush them in
+             * the next function call
+             */
+            fsetpos(lf->fp, &fp_last_multiline_pos);
+            lf->truncated_multiline = 1;
+        }
+
     }
 
     mdebug2("Read %d lines from %s", lines, lf->file);
